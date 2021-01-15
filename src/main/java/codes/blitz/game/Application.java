@@ -14,10 +14,15 @@ public class Application {
 	public static void main(String[] args) {
 		CountDownLatch latch = new CountDownLatch(1);
 
+		String uri = "ws://127.0.0.1:8765";
+		
+		//Pour Alack
+		uri = "ws://159.203.94.148:8765";
+		
 		ClientManager client = ClientManager.createClient();
 		try {
 			client.connectToServer(new WebsocketClient(latch),
-					new URI("ws://127.0.0.1:8765"));
+					new URI(uri));
 			latch.await();
 		} catch (DeploymentException | URISyntaxException | InterruptedException
 				| IOException e) {
