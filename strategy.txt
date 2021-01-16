@@ -1,0 +1,21 @@
+
+
+Capacité transport : Somme(Capacité (Cart_i))
+Capacité cart_i : CartMaxCharge/(2*Dist(base, cible_i) )
+
+
+Capacité de production : Nbr de mineurs à côté d'une mine
+
+	
+Intérêt d'acheter un mineurs
+	La capacité de production est plus petite ou égale à la capacité de transport
+	Il reste un emplacement de mine disponible
+	Le potentiel de point est positif
+	
+Intérêt d'acheter un Cart
+	La capapacité de transport est inférieure à la capacité de production.
+	Le potentiel de point est positif.
+		Le potentiel dépend d'un mineur cible (trajet pour aller-retour)
+	
+	
+Potentiel d'un nouvel item :  capacité(transport ou production selon le type)*nbTick_restant - Coût d'achat
