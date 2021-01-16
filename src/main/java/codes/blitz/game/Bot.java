@@ -60,6 +60,7 @@ public class Bot {
 		// #############
 
 		List<Action> actions = myCrew.getUnits().stream()
+				.sorted(Comparator.comparing(Unit::getId))
 				.map(unit -> {
 					this.unit = unit;
 					terrain = new Terrain(gameMessage, unit);
@@ -98,7 +99,6 @@ public class Bot {
 		var miners = myCrew.getUnits()
 				.stream()
 				.filter(u -> u.getType() == UnitType.MINER)
-				.sorted((x, y) -> y.getBlitzium() - x.getBlitzium())
 				.collect(Collectors.toList());
 
 		var carts = myCrew.getUnits().stream().filter(u -> u.getType() == UnitType.CART).collect(Collectors.toList());
@@ -135,10 +135,9 @@ public class Bot {
 			return generateMoveAction(unit, miners.get(0).getPosition());
 		}
 
-		// If there are multiple miners, only move to a miners with blitzium, to avoid collisions
 		var theChosenOne = cartAssignations.get(unit).getPosition();
 
-		if (terrain.isNeighboring(theChosenOne)) {
+		if (!terrain.reachable(theChosenOne) || terrain.isNeighboring(theChosenOne)) {
 			return generateNoneAction();
 		}
 		return generateMoveAction(unit, theChosenOne);
