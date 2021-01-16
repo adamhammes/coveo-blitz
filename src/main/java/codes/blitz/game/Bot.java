@@ -81,7 +81,7 @@ public class Bot {
 			actions.add(createMiner);
 		}
 
-		if (numCarts >= 1 && numMiners < 2 && myCrew.getBlitzium() >= minerCost) {
+		if (numCarts >= 1 && numMiners < 3 && myCrew.getBlitzium() >= minerCost) {
 			var createMiner = new BuyAction(UnitType.MINER);
 			actions.add(createMiner);
 		}
@@ -105,13 +105,19 @@ public class Bot {
 
 		// pick a random miner
 		var miners = myCrew.getUnits().stream()
-				.filter(u -> u.getType() == UnitType.MINER && u.getBlitzium() > 0)
+				.filter(u -> u.getType() == UnitType.MINER)
 				.collect(Collectors.toList());
 
 		if (miners.isEmpty()) {
 			return new UnitAction(UnitActionType.NONE, unit.getId(), unit.getPosition());
 		}
 
+		if (miners.size() == 1) {
+			return generateMoveAction(unit, miners.get(0).getPosition());
+		}
+
+		// If there are multiple miners, only move to a miners with blitzium, to avoid collisions
+		miners = miners.stream().filter(m -> m.getBlitzium() > 0).collect(Collectors.toList());
 		var theChosenOne = terrain.closestPosition(miners.stream().filter(m -> !surplusMiners.contains(m)).map(Unit::getPosition).collect(Collectors.toList()));
 
 		if (terrain.isNeighboring(theChosenOne)) {
