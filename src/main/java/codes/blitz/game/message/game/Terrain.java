@@ -133,8 +133,7 @@ public class Terrain {
                 .flatMap(m -> neighbors(m).stream())
                 .filter(p -> pathTo(fromPosition, p, new HashSet<>()) != null)
                 .filter(p -> !occupiedPositions.contains(p))
-                .distinct()
-                .sorted(Comparator.comparingInt(this::distanceTo));
+                .distinct();
 
 
         return mineNeighbors.collect(Collectors.toList());
