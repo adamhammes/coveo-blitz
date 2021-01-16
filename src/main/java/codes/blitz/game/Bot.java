@@ -126,6 +126,11 @@ public class Bot {
 	}
 
 	public Action buyLogic() {
+		var remainingTicks = gameMessage.getTotalTick() - gameMessage.getTick();
+	    if (remainingTicks < 200) {
+	    	return null;
+		}
+
 		var numCarts = myCrew.getUnits().stream().filter(unit -> unit.getType() == UnitType.CART).count();
 		var numMiners = myCrew.getUnits().stream().filter(unit -> unit.getType() == UnitType.MINER).count();
 
