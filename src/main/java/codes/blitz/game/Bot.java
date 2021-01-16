@@ -87,12 +87,13 @@ public class Bot {
 	}
 
 	public Action buyLogic() {
-	    var MAX_MINERS = 6;
+		var numCarts = myCrew.getUnits().stream().filter(unit -> unit.getType() == UnitType.CART).count();
+		var numMiners = myCrew.getUnits().stream().filter(unit -> unit.getType() == UnitType.MINER).count();
+
+	    var MAX_MINERS = Math.min(6, terrain.getMineablePositions().size() + numMiners);
 	    var MAX_CARTS = 6;
 
 
-		var numCarts = myCrew.getUnits().stream().filter(unit -> unit.getType() == UnitType.CART).count();
-		var numMiners = myCrew.getUnits().stream().filter(unit -> unit.getType() == UnitType.MINER).count();
 		var cartCost = myCrew.getPrices().getCartPrice();
 		var minerCost = myCrew.getPrices().getMinerPrice();
 
@@ -218,7 +219,7 @@ public class Bot {
 	    	return new UnitAction(UnitActionType.NONE, u.getId(), u.getPosition());
 		}
 
-	    if (!terrain.reachable(p)) {
+	    if (terrain.pathTo(p) == null) {
 	    	return generateNoneAction();
 		}
 

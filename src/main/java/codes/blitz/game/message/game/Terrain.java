@@ -98,11 +98,12 @@ public class Terrain {
                 .distinct()
                 .sorted(Comparator.comparingInt(this::distanceTo));
 
+
         return mineNeighbors.collect(Collectors.toList());
     }
 
     public boolean reachable(Position p) {
-        return fastestPath.containsKey(p);
+        return fastestPath.containsKey(p) && positionHasType(p, TileType.EMPTY);
     }
 
     public int distanceTo(Position p) {
