@@ -4,7 +4,6 @@ import codes.blitz.game.message.exception.PositionOutOfMapException;
 
 import java.util.*;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 public class Terrain {
     private GameMessage gameMessage;
@@ -56,8 +55,8 @@ public class Terrain {
         var positions = new ArrayList<Position>();
 
         positions.add(new Position(p.getX() - 1, p.getY()));
-        positions.add(new Position(p.getX() + 1, p.getY()));
         positions.add(new Position(p.getX(), p.getY() - 1));
+        positions.add(new Position(p.getX() + 1, p.getY()));
         positions.add(new Position(p.getX(), p.getY() + 1));
 
         var reachablePositions = new ArrayList<Position>();
@@ -113,6 +112,11 @@ public class Terrain {
     public List<Position> pathTo(Position p) {
         return fastestPath.get(p);
     }
+
+//    // Return a path for the current unit to position P, not using the positions in `excluding`.
+//    public List<Position> pathTo(Position p, HashSet<Position> excluding) {
+//
+//    }
 
     public Position closestPosition(List<Position> positions) {
         var closestPosition = positions.stream().findFirst().orElseThrow();

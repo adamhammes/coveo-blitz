@@ -19,6 +19,8 @@ public class Bot {
 	private List<Unit> surplusMiners;
 	private Map<Unit, Unit> cartAssignations;
 
+	private Set<Position> chosenPositions;
+
 	public Bot() {
 		// initialize some variables you will need throughout the game here
 	}
@@ -35,6 +37,7 @@ public class Bot {
 		this.map = gameMessage.getGameMap();
 		this.base = myCrew.getHomeBase();
 		this.requestedMiningLocations = new HashSet<>();
+		this.chosenPositions = new HashSet<>();
 
 		this.unitTypeCounts = new HashMap<>();
 		for (var unit: myCrew.getUnits()) {
@@ -75,22 +78,32 @@ public class Bot {
 				})
 				.collect(Collectors.toList());
 
+		var buyAction = buyLogic();
+		if (buyAction != null) {
+			actions.add(buyAction);
+		}
+
+		return actions;
+	}
+
+	public Action buyLogic() {
+	    var MAX_MINERS = 6;
+	    var MAX_CARTS = 6;
+
+
 		var numCarts = myCrew.getUnits().stream().filter(unit -> unit.getType() == UnitType.CART).count();
 		var numMiners = myCrew.getUnits().stream().filter(unit -> unit.getType() == UnitType.MINER).count();
 		var cartCost = myCrew.getPrices().getCartPrice();
 		var minerCost = myCrew.getPrices().getMinerPrice();
 
-		if (numCarts < 2 && (numMiners - numCarts > 0) && cartCost <= myCrew.getBlitzium()) {
-			var createMiner = new BuyAction(UnitType.CART);
-			actions.add(createMiner);
+		if (numCarts < MAX_CARTS && surplusMiners.size() > 0 && cartCost <= myCrew.getBlitzium()) {
+			return new BuyAction(UnitType.CART);
 		}
 
-		if ((numMiners == 0 || (numCarts >= 1 && numMiners < 2)) && myCrew.getBlitzium() >= minerCost) {
-			var createMiner = new BuyAction(UnitType.MINER);
-			actions.add(createMiner);
+		if (numMiners < MAX_MINERS && minerCost <= myCrew.getBlitzium()) {
+			return new BuyAction(UnitType.MINER);
 		}
-
-		return actions;
+		return null;
 	}
 
 	public void assignCarts() {
@@ -147,6 +160,7 @@ public class Bot {
 		return new UnitAction(UnitActionType.NONE, unit.getId(), unit.getPosition());
 	}
 
+
 	public Action minerLogic(Unit unit) {
 		var isSurplusMiner = surplusMiners.contains(unit);
 
@@ -188,13 +202,12 @@ public class Bot {
 			}
 		}
 
-		var mines = terrain.getMineablePositions();
-        var mine = mines.stream().filter(m -> !requestedMiningLocations.contains(m)).findFirst().orElseThrow();
-        System.out.println(mine);
-        requestedMiningLocations.add(mine);
+		var mines = terrain.getMineablePositions().stream().filter(m -> !requestedMiningLocations.contains(m)).collect(Collectors.toList());
 
-        if (!canMine(unit.getPosition()) && unit.getBlitzium() < 25) {
-        	return generateMoveAction(unit, mine);
+        if (!mines.isEmpty() && !canMine(unit.getPosition()) && unit.getBlitzium() < 25) {
+        	var mine = mines.stream().findFirst().orElseThrow();
+			requestedMiningLocations.add(mine);
+			return generateMoveAction(unit, mine);
 		} else {
         	return new UnitAction(UnitActionType.NONE, unit.getId(), unit.getPosition());
 		}
@@ -205,27 +218,17 @@ public class Bot {
 	    	return new UnitAction(UnitActionType.NONE, u.getId(), u.getPosition());
 		}
 
-		var path = terrain.pathTo(p);
-		return new UnitAction(UnitActionType.MOVE, u.getId(), path.get(1));
-	}
-
-	public List<Position> adjacentToTileType(Position pos, TileType type) {
-		return terrain.neighbors(pos).stream().filter(p -> positionHasType(p, type)).collect(Collectors.toList());
-	}
-
-	public List<Position> friendlyAdjacentUnitPositions(Position pos, UnitType type) {
-		var neighboringPositions = new ArrayList<Position>();
-
-		var adjacentPositions = terrain.neighbors(pos);
-		for (var unit: myCrew.getUnits()) {
-			if (unit.getType() == type && adjacentPositions.contains( unit.getPosition())) {
-			    neighboringPositions.add(unit.getPosition());
-			}
+	    if (!terrain.reachable(p)) {
+	    	return generateNoneAction();
 		}
 
-		return neighboringPositions;
+		var moveTo = terrain.pathTo(p).get(1);
+	    if (chosenPositions.contains(moveTo)) {
+	    	return generateNoneAction();
+		}
+	    chosenPositions.add(moveTo);
+		return new UnitAction(UnitActionType.MOVE, u.getId(), moveTo);
 	}
-
 
 	public boolean positionHasType(Position p, TileType t) {
 		try {
