@@ -127,6 +127,19 @@ public class Terrain {
         return mineNeighbors.collect(Collectors.toList());
     }
 
+    public List<Position> getMineablePositions(Position fromPosition) {
+        var mines = positionsOfType(TileType.MINE);
+        var mineNeighbors = mines.stream()
+                .flatMap(m -> neighbors(m).stream())
+                .filter(p -> pathTo(fromPosition, p, new HashSet<>()) != null)
+                .filter(p -> !occupiedPositions.contains(p))
+                .distinct()
+                .sorted(Comparator.comparingInt(this::distanceTo));
+
+
+        return mineNeighbors.collect(Collectors.toList());
+    }
+
     public boolean reachable(Position p) {
         return fastestPath.containsKey(p) && positionHasType(p, TileType.EMPTY);
     }

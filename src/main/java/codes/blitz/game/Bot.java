@@ -126,7 +126,7 @@ public class Bot {
 		var numCarts = myCrew.getUnits().stream().filter(unit -> unit.getType() == UnitType.CART).count();
 		var numMiners = myCrew.getUnits().stream().filter(unit -> unit.getType() == UnitType.MINER).count();
 
-	    var MAX_MINERS = Math.min(6, terrain.getMineablePositions().size() + numMiners);
+	    var MAX_MINERS = Math.min(6, terrain.getMineablePositions(base).size() + numMiners);
 	    var MAX_CARTS = 6;
 
 
