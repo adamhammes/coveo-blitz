@@ -10,7 +10,11 @@ import codes.blitz.game.message.exception.PositionOutOfMapException;
 import codes.blitz.game.message.game.*;
 
 public class Bot {
+    private GameMessage gameMessage;
+    private Crew myCrew;
 	private GameMap map;
+	private Position base;
+
 	public Bot() {
 		// initialize some variables you will need throughout the game here
 	}
@@ -22,15 +26,11 @@ public class Bot {
     * it in the next turns.
     */
 	public List<Action> getNextActions(GameMessage gameMessage) {
+		this.gameMessage = gameMessage;
+		this.myCrew = gameMessage.getCrewsMapById().get(gameMessage.getCrewId());
+		this.map = gameMessage.getGameMap();
+		this.base = myCrew.getHomeBase();
 
-		Crew myCrew = gameMessage.getCrewsMapById()
-				.get(gameMessage.getCrewId());
-
-		var map = gameMessage.getGameMap();
-		this.map = map;
-
-		var mine = this.getMinePosition();
-		final var walkTo = this.getWalkablePositionAround(mine);
 
 		// #x###########
 		// ###o##########
@@ -41,45 +41,130 @@ public class Bot {
 
 		List<Action> actions = myCrew.getUnits().stream()
 				.map(unit -> {
-					var unitPosition = unit.getPosition();
-					var adjacentPositions = getAdjacentPositions(unitPosition);
-
-
-					// if we have blitzium
-					if (unit.getBlitzium() > 4) {
-					    // if we are adjacent to a base:
-						for (var adjPos: getAdjacentPositions(unitPosition)) {
-							if (positionHasType(adjPos, TileType.BASE)) {
-								return new UnitAction(UnitActionType.DROP, unit.getId(), adjPos);
-							}
-						}
-
-						// else, move towards a depot
-					    var myBase = gameMessage.getCrewsMapById().get(myCrew.getId()).getHomeBase();
-					    var moveTo = getAdjacentPositions(myBase).get(0);
-						return new UnitAction(UnitActionType.MOVE, unit.getId(), moveTo);
+				    if (unit.getType() == UnitType.MINER) {
+						return minerLogic(unit);
+					} else if (unit.getType() == UnitType.CART) {
+				    	return cartLogic(unit);
+					} else {
+				        return new UnitAction(UnitActionType.NONE, unit.getId(), unit.getPosition());
 					}
-
-					// else, check if we are by a mine; if so, mine!!!
-					for (var pos: adjacentPositions) {
-						if (positionHasType(pos, TileType.MINE)) {
-							System.out.println("mine!");
-							return new UnitAction(UnitActionType.MINE, unit.getId(), pos);
-						}
-					}
-
-					// else, try to walk towards a mine
-					System.out.println("walk towards mine");
-					return new UnitAction(UnitActionType.MOVE, unit.getId(), walkTo);
 				})
 				.collect(Collectors.toList());
+
+		var numCarts = myCrew.getUnits().stream().filter(unit -> unit.getType() == UnitType.CART).count();
+		var cartCost = myCrew.getPrices().getMinerPrice();
+
+		System.out.println("num carts " + numCarts);
+		System.out.println("cart cost" + cartCost);
+		System.out.println("my blitzium" + myCrew.getBlitzium());
+
+		if (numCarts < 1 && cartCost <= myCrew.getBlitzium()) {
+			var createMiner = new BuyAction(UnitType.CART);
+			actions.add(createMiner);
+		}
 
 		return actions;
 
 	}
 
+	public Action cartLogic(Unit unit) {
+		// if we have blitzium
+	    if (unit.getBlitzium() > 24) {
+	        // and are next to a base
+			if (getAdjacentPositions(unit.getPosition()).contains(base)) {
+				// drop
+				return new UnitAction(UnitActionType.DROP, unit.getId(), base);
+			} else {
+				var moveTo = getAdjacentPositions(base).get(0);
+				return new UnitAction(UnitActionType.MOVE, unit.getId(), moveTo);
+			}
+		}
+
+		// pick a random miner
+		var miners = myCrew.getUnits().stream().filter(u -> u.getType() == UnitType.MINER).collect(Collectors.toList());
+
+		if (miners.isEmpty()) {
+			return new UnitAction(UnitActionType.NONE, unit.getId(), unit.getPosition());
+
+		}
+
+
+		var theChosenOne = miners.get(0);
+
+		var moveTo = getAdjacentPositions(theChosenOne.getPosition()).get(0);
+		return new UnitAction(UnitActionType.MOVE, unit.getId(), moveTo);
+	}
+
+	public Action minerLogic(Unit unit) {
+		var unitPosition = unit.getPosition();
+		var adjacentPositions = getAdjacentPositions(unitPosition);
+
+		var cartCount = myCrew.getUnits().stream().filter(u -> u.getType() == UnitType.CART).count();
+		// no carts yet -> we need to return our blitzium
+		if (cartCount < 1 && unit.getBlitzium() > 4) {
+			// if we are adjacent to a base, and have blitzium:
+				for (var adjPos: getAdjacentPositions(unitPosition)) {
+					if (positionHasType(adjPos, TileType.BASE)) {
+						return new UnitAction(UnitActionType.DROP, unit.getId(), adjPos);
+					}
+				}
+
+			// else, move towards a depot
+			var myBase = gameMessage.getCrewsMapById().get(myCrew.getId()).getHomeBase();
+			var moveTo = getAdjacentPositions(myBase).get(0);
+			return new UnitAction(UnitActionType.MOVE, unit.getId(), moveTo);
+		}
+
+
+		var mine = getAllPositions().stream().filter(pos -> positionHasType(pos, TileType.MINE)).collect(Collectors.toList()).get(0);
+		final var walkTo = getAdjacentPositions(mine).get(0);
+
+		// if we have at least 25 blitzium and are by a cart, drop the blitzium to that cart
+		var adjacentCarts = friendlyAdjacentUnitPositions(unit.getPosition(),UnitType.CART);
+		if (unit.getBlitzium() >= 25 && !adjacentCarts.isEmpty()) {
+			return new UnitAction(UnitActionType.DROP, unit.getId(), adjacentCarts.get(0));
+		}
+
+
+		// else, check if we are by a mine with < 25 blitzium; mine
+        if (unit.getBlitzium() < 50) {
+			for (var pos: adjacentPositions) {
+				if (positionHasType(pos, TileType.MINE)) {
+					System.out.println("mine!");
+					return new UnitAction(UnitActionType.MINE, unit.getId(), pos);
+				}
+			}
+		}
+
+        if (!canMine(unit.getPosition()) && unit.getBlitzium() < 25) {
+			// else, try to walk towards a mine
+			System.out.println("walk towards mine");
+			return new UnitAction(UnitActionType.MOVE, unit.getId(), walkTo);
+
+		} else {
+        	return new UnitAction(UnitActionType.NONE, unit.getId(), unit.getPosition());
+		}
+	}
+
+	public List<Position> adjacentToTileType(Position pos, TileType type) {
+		return getAdjacentPositions(pos).stream().filter(p -> positionHasType(p, type)).collect(Collectors.toList());
+	}
+
+	public List<Position> friendlyAdjacentUnitPositions(Position pos, UnitType type) {
+		var neighboringPositions = new ArrayList<Position>();
+
+		var adjacentPositions = getAdjacentPositions(pos);
+		for (var unit: myCrew.getUnits()) {
+			if (unit.getType() == type && adjacentPositions.contains( unit.getPosition())) {
+			    neighboringPositions.add(unit.getPosition());
+			}
+		}
+
+		return neighboringPositions;
+	}
+
 	public List<Position> getAllPositions() {
-	    var positions = new ArrayList<Position>();
+		var positions = new ArrayList<Position>();
 
 		var mapSize = this.map.getMapSize();
 		for (int x = 0; x < mapSize; x++) {
