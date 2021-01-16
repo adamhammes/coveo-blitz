@@ -18,14 +18,39 @@ public class Terrain {
 
         allUnits = new ArrayList<>();
         for (var crew: gameMessage.getCrews()) {
-            for (var u: crew.getUnits()) {
-                allUnits.add(u);
+            allUnits.addAll(crew.getUnits());
+        }
+
+        occupiedPositions = allUnits.stream().map(Unit::getPosition).collect(Collectors.toSet());
+        occupiedPositions.addAll(enemyBaseSquares());
+
+        this.buildFastestPath();
+    }
+
+    private Set<Position> enemyBaseSquares() {
+        var enemyPositions = new HashSet<Position>();
+
+        for (var crew: gameMessage.getCrews()) {
+            // don't eliminate our own home base
+            if (crew.getId().equals(gameMessage.getCrewId())) {
+                continue;
+            }
+
+            var enemyBase = crew.getHomeBase();
+            var x = enemyBase.getX();
+            var y = enemyBase.getY();
+            for (var dx: new int[]{ 0, 1, 2, 3}) {
+                for (var dy: new int[]{ 0, 1, 2, 3}) {
+
+                    enemyPositions.add(new Position(x+dx,  y+dy));
+                    enemyPositions.add(new Position(x-dx,  y+dy));
+                    enemyPositions.add(new Position(x+dx, y-dy));
+                    enemyPositions.add(new Position(x-dx, y-dy));
+                }
             }
         }
 
-        occupiedPositions = new HashSet<>(allUnits.stream().map(Unit::getPosition).collect(Collectors.toList()));
-
-        this.buildFastestPath();
+        return enemyPositions;
     }
 
     private void buildFastestPath() {
@@ -112,6 +137,41 @@ public class Terrain {
 
     public List<Position> pathTo(Position p) {
         return fastestPath.get(p);
+    }
+
+    // Return `null` when there is no viable path
+    public List<Position> pathTo(Position start, Position dest, Set<Position> restrictedPositions) {
+        Map<Position, List<Position>> paths = new HashMap<>();
+        paths.put(start, Collections.singletonList(start));
+
+        Queue<Position> queue = new LinkedList<>(Collections.singletonList(start));
+
+        while (!queue.isEmpty()) {
+            var currentPosition = queue.remove();
+            var pathToPosition = paths.get(currentPosition);
+
+            for (var neighbor: neighbors(currentPosition)) {
+                var pathCopy = new ArrayList<>(pathToPosition);
+                pathCopy.add(neighbor);
+
+                if (neighbor.equals(dest)) {
+                    return pathCopy;
+                }
+
+                if (!paths.containsKey(neighbor)) {
+                    paths.put(neighbor, pathCopy);
+                    if (
+                            positionHasType(neighbor, TileType.EMPTY)&&
+                                    !restrictedPositions.contains(neighbor) &&
+                                    !occupiedPositions.contains(neighbor)) {
+
+                        queue.add(neighbor);
+                    }
+                }
+            }
+        }
+
+        return null;
     }
 
 //    // Return a path for the current unit to position P, not using the positions in `excluding`.

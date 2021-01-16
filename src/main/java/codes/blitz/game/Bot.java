@@ -19,7 +19,6 @@ public class Bot {
 	private List<Unit> surplusMiners;
 	private Map<Unit, Unit> cartAssignations;
 
-	private Set<Position> chosenPositions;
 
 	public Bot() {
 		// initialize some variables you will need throughout the game here
@@ -37,7 +36,6 @@ public class Bot {
 		this.map = gameMessage.getGameMap();
 		this.base = myCrew.getHomeBase();
 		this.requestedMiningLocations = new HashSet<>();
-		this.chosenPositions = new HashSet<>();
 
 		this.unitTypeCounts = new HashMap<>();
 		for (var unit: myCrew.getUnits()) {
@@ -61,6 +59,7 @@ public class Bot {
 		// ###o######o##
 		// #############
 		// #############
+		Map<Unit, Position> desiredCartDestinations = new HashMap<>();
 
 		List<Action> actions = myCrew.getUnits().stream()
 				.sorted(Comparator.comparing(Unit::getId))
@@ -69,14 +68,30 @@ public class Bot {
 					terrain = new Terrain(gameMessage, unit);
 
 				    if (unit.getType() == UnitType.MINER) {
-						return minerLogic(unit);
+						var minerAction = minerLogic(unit);
+						if (minerAction.getAction() == UnitActionType.MOVE) {
+							desiredCartDestinations.put(unit, minerAction.getTarget());
+							return null;
+						} else {
+							return minerAction;
+						}
 					} else if (unit.getType() == UnitType.CART) {
-				    	return cartLogic(unit);
+				    	var cartAction = cartLogic(unit);
+				    	if (cartAction.getAction() == UnitActionType.MOVE) {
+				    		desiredCartDestinations.put(unit, cartAction.getTarget());
+				    		return null;
+						} else {
+				    		return cartAction;
+						}
 					} else {
 				        return new UnitAction(UnitActionType.NONE, unit.getId(), unit.getPosition());
 					}
 				})
+				.filter(Objects::nonNull)
 				.collect(Collectors.toList());
+
+		var cartActions = coordinateCarts(desiredCartDestinations);
+		actions.addAll(cartActions);
 
 		var buyAction = buyLogic();
 		if (buyAction != null) {
@@ -86,12 +101,33 @@ public class Bot {
 		return actions;
 	}
 
+	public List<UnitAction> coordinateCarts(Map<Unit, Position> cartDestinations) {
+	    Set<Position> restrictedPositions = new HashSet<>();
+	    List<UnitAction> cartMoves = new ArrayList<>();
+
+	    // TODO: sort the carts by priority
+	    for (var entry: cartDestinations.entrySet()) {
+	    	var cart = entry.getKey();
+	    	var destination = entry.getValue();
+
+	    	var path = terrain.pathTo(cart.getPosition(), destination, restrictedPositions);
+	    	if (path != null) {
+	    		var action = new UnitAction(UnitActionType.MOVE, cart.getId(), path.get(1));
+	    		cartMoves.add(action);
+
+	    		path.stream().limit(3).forEach(restrictedPositions::add);
+			}
+		}
+
+		return cartMoves;
+	}
+
 	public Action buyLogic() {
 		var numCarts = myCrew.getUnits().stream().filter(unit -> unit.getType() == UnitType.CART).count();
 		var numMiners = myCrew.getUnits().stream().filter(unit -> unit.getType() == UnitType.MINER).count();
 
-	    var MAX_MINERS = Math.min(4, terrain.getMineablePositions().size() + numMiners);
-	    var MAX_CARTS = 4;
+	    var MAX_MINERS = Math.min(6, terrain.getMineablePositions().size() + numMiners);
+	    var MAX_CARTS = 6;
 
 
 		var cartCost = myCrew.getPrices().getCartPrice();
@@ -124,7 +160,7 @@ public class Bot {
 	}
 
 
-	public Action cartLogic(Unit unit) {
+	public UnitAction cartLogic(Unit unit) {
 		// if we have blitzium
 	    if (unit.getBlitzium() > 24) {
 	        // and are next to a base
@@ -157,12 +193,12 @@ public class Bot {
 		return generateMoveAction(unit, theChosenOne);
 	}
 
-	private Action generateNoneAction() {
+	private UnitAction generateNoneAction() {
 		return new UnitAction(UnitActionType.NONE, unit.getId(), unit.getPosition());
 	}
 
 
-	public Action minerLogic(Unit unit) {
+	public UnitAction minerLogic(Unit unit) {
 		var isSurplusMiner = surplusMiners.contains(unit);
 
 		var unitPosition = unit.getPosition();
@@ -208,13 +244,14 @@ public class Bot {
         if (!mines.isEmpty() && !canMine(unit.getPosition()) && unit.getBlitzium() < 25) {
         	var mine = mines.stream().findFirst().orElseThrow();
 			requestedMiningLocations.add(mine);
+			System.out.println("Trying to mine at " + mine.toString());
 			return generateMoveAction(unit, mine);
 		} else {
         	return new UnitAction(UnitActionType.NONE, unit.getId(), unit.getPosition());
 		}
 	}
 
-	public Action generateMoveAction(Unit u, Position p) {
+	public UnitAction generateMoveAction(Unit u, Position p) {
 	    if (u.getPosition().equals(p)) {
 	    	return new UnitAction(UnitActionType.NONE, u.getId(), u.getPosition());
 		}
@@ -223,12 +260,7 @@ public class Bot {
 	    	return generateNoneAction();
 		}
 
-		var moveTo = terrain.pathTo(p).get(1);
-	    if (chosenPositions.contains(moveTo)) {
-	    	return generateNoneAction();
-		}
-	    chosenPositions.add(moveTo);
-		return new UnitAction(UnitActionType.MOVE, u.getId(), moveTo);
+		return new UnitAction(UnitActionType.MOVE, u.getId(), p);
 	}
 
 	public boolean positionHasType(Position p, TileType t) {
