@@ -47,6 +47,9 @@ public class Bot {
 		}
 
 		var minerSurplus = unitTypeCounts.getOrDefault(UnitType.MINER, 0) - unitTypeCounts.getOrDefault(UnitType.CART, 0);
+		if (minerSurplus <= 0) {
+			minerSurplus = 0;
+		}
 		surplusMiners = myCrew.getUnits().stream().filter(u -> u.getType() == UnitType.MINER).collect(Collectors.toList());
 		Collections.reverse(surplusMiners);
 		surplusMiners = surplusMiners.stream().limit(minerSurplus).collect(Collectors.toList());
