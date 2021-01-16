@@ -21,6 +21,9 @@ public class Terrain {
         fastestPath = new HashMap<>();
         fastestPath.put(unit.getPosition(), Collections.singletonList(unit.getPosition()));
 
+        var myCrew = gameMessage.getCrewsMapById().get(gameMessage.getCrewId());
+        var unitPositions = myCrew.getUnits().stream().map(Unit::getPosition).collect(Collectors.toList());
+
         Queue<Position> queue = new LinkedList<>(Collections.singletonList(unit.getPosition()));
 
         while (!queue.isEmpty()) {
@@ -29,10 +32,12 @@ public class Terrain {
 
             for (var neighbor: neighbors(currentPosition)) {
                 if (!fastestPath.containsKey(neighbor)) {
-                    queue.add(neighbor);
                     var pathCopy = new ArrayList<>(pathToPosition);
                     pathCopy.add(neighbor);
                     fastestPath.put(neighbor, pathCopy);
+                    if (positionHasType(neighbor, TileType.EMPTY) && !unitPositions.contains(neighbor)) {
+                        queue.add(neighbor);
+                    }
                 }
             }
         }
@@ -51,7 +56,6 @@ public class Terrain {
             try {
                 gameMessage.getGameMap().validateTileExists(pos);
                 reachablePositions.add(pos);
-
             } catch (PositionOutOfMapException e) {
             }
         }
@@ -103,6 +107,15 @@ public class Terrain {
         } catch (PositionOutOfMapException e) {
             return false;
         }
+    }
+
+    public List<Position> positionsOfType(TileType type) {
+        return getAllPositions()
+                .stream()
+                .filter(p -> positionHasType(p, type))
+                .sorted(Comparator.comparingInt(this::distanceTo).thenComparingInt(Position::getX))
+                .collect(Collectors.toList());
+
     }
 
     public Position closestPositionOfType(TileType type) {

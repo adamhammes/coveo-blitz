@@ -1,8 +1,6 @@
 package codes.blitz.game;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
+import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
@@ -16,6 +14,9 @@ public class Bot {
 	private Position base;
 	private Terrain terrain;
 	private Unit unit;
+	private Set<Position> requestedMiningLocations;
+	private Map<UnitType, Integer> unitTypeCounts;
+	private List<Unit> surplusMiners;
 
 	public Bot() {
 		// initialize some variables you will need throughout the game here
@@ -32,7 +33,21 @@ public class Bot {
 		this.myCrew = gameMessage.getCrewsMapById().get(gameMessage.getCrewId());
 		this.map = gameMessage.getGameMap();
 		this.base = myCrew.getHomeBase();
+		this.requestedMiningLocations = new HashSet<>();
 
+		this.unitTypeCounts = new HashMap<>();
+		for (var unit: myCrew.getUnits()) {
+			if (unitTypeCounts.containsKey(unit.getType())) {
+				unitTypeCounts.put(unit.getType(), unitTypeCounts.get(unit.getType()) + 1);
+			} else {
+				unitTypeCounts.put(unit.getType(), 1);
+			}
+		}
+
+		var minerSurplus = unitTypeCounts.getOrDefault(UnitType.MINER, 0) - unitTypeCounts.getOrDefault(UnitType.CART, 0);
+		surplusMiners = myCrew.getUnits().stream().filter(u -> u.getType() == UnitType.MINER).collect(Collectors.toList());
+		Collections.reverse(surplusMiners);
+		surplusMiners = surplusMiners.stream().limit(minerSurplus).collect(Collectors.toList());
 
 		// #x###########
 		// ###o##########
@@ -57,10 +72,17 @@ public class Bot {
 				.collect(Collectors.toList());
 
 		var numCarts = myCrew.getUnits().stream().filter(unit -> unit.getType() == UnitType.CART).count();
+		var numMiners = myCrew.getUnits().stream().filter(unit -> unit.getType() == UnitType.MINER).count();
 		var cartCost = myCrew.getPrices().getCartPrice();
+		var minerCost = myCrew.getPrices().getMinerPrice();
 
 		if (numCarts < 1 && cartCost <= myCrew.getBlitzium()) {
 			var createMiner = new BuyAction(UnitType.CART);
+			actions.add(createMiner);
+		}
+
+		if (numCarts >= 1 && numMiners < 2 && myCrew.getBlitzium() >= minerCost) {
+			var createMiner = new BuyAction(UnitType.MINER);
 			actions.add(createMiner);
 		}
 
@@ -82,13 +104,15 @@ public class Bot {
 
 
 		// pick a random miner
-		var miners = myCrew.getUnits().stream().filter(u -> u.getType() == UnitType.MINER).collect(Collectors.toList());
+		var miners = myCrew.getUnits().stream()
+				.filter(u -> u.getType() == UnitType.MINER && u.getBlitzium() > 0)
+				.collect(Collectors.toList());
 
 		if (miners.isEmpty()) {
 			return new UnitAction(UnitActionType.NONE, unit.getId(), unit.getPosition());
 		}
 
-		var theChosenOne = terrain.closestPosition(miners.stream().map(Unit::getPosition).collect(Collectors.toList()));
+		var theChosenOne = terrain.closestPosition(miners.stream().filter(m -> !surplusMiners.contains(m)).map(Unit::getPosition).collect(Collectors.toList()));
 
 		if (terrain.isNeighboring(theChosenOne)) {
 			return generateNoneAction();
@@ -101,12 +125,12 @@ public class Bot {
 	}
 
 	public Action minerLogic(Unit unit) {
+		var isSurplusMiner = surplusMiners.contains(unit);
+
 		var unitPosition = unit.getPosition();
 		var adjacentPositions = terrain.neighbors(unitPosition);
 
-		var cartCount = myCrew.getUnits().stream().filter(u -> u.getType() == UnitType.CART).count();
-		// no carts yet -> we need to return our blitzium
-		if (cartCount < 1 && unit.getBlitzium() > 4) {
+		if (isSurplusMiner && unit.getBlitzium() > 4) {
 			// if we are adjacent to a base, and have blitzium:
 			if (terrain.isNeighboring(base)) {
 				return new UnitAction(UnitActionType.DROP, unit.getId(), base);
@@ -130,14 +154,18 @@ public class Bot {
         if (unit.getBlitzium() < 50) {
 			for (var pos: adjacentPositions) {
 				if (positionHasType(pos, TileType.MINE)) {
+					requestedMiningLocations.add(pos);
 					return new UnitAction(UnitActionType.MINE, unit.getId(), pos);
 				}
 			}
 		}
 
-		var mine = terrain.closestPositionOfType(TileType.MINE);
+		var mines = terrain.positionsOfType(TileType.MINE);
+        var mine = mines.stream().filter(m -> !requestedMiningLocations.contains(m)).findFirst().orElseThrow();
+        System.out.println(mine);
+        requestedMiningLocations.add(mine);
 
-        if (!canMine(unit.getPosition()) && unit.getBlitzium() < 25) {
+        if (!terrain.isNeighboring(mine) && unit.getBlitzium() < 25) {
         	return generateMoveAction(unit, mine);
 		} else {
         	return new UnitAction(UnitActionType.NONE, unit.getId(), unit.getPosition());
