@@ -17,6 +17,7 @@ public class Bot {
 	private Set<Position> requestedMiningLocations;
 	private Map<UnitType, Integer> unitTypeCounts;
 	private List<Unit> surplusMiners;
+	private Map<Unit, Unit> cartAssignations;
 
 	public Bot() {
 		// initialize some variables you will need throughout the game here
@@ -49,6 +50,8 @@ public class Bot {
 		Collections.reverse(surplusMiners);
 		surplusMiners = surplusMiners.stream().limit(minerSurplus).collect(Collectors.toList());
 
+		this.assignCarts();
+
 		// #x###########
 		// ###o##########
 		// ###o#########
@@ -76,19 +79,36 @@ public class Bot {
 		var cartCost = myCrew.getPrices().getCartPrice();
 		var minerCost = myCrew.getPrices().getMinerPrice();
 
-		if (numCarts < 1 && cartCost <= myCrew.getBlitzium()) {
+		if (numCarts < 2 && (numMiners - numCarts > 0) && cartCost <= myCrew.getBlitzium()) {
 			var createMiner = new BuyAction(UnitType.CART);
 			actions.add(createMiner);
 		}
 
-		if (numCarts >= 1 && numMiners < 2 && myCrew.getBlitzium() >= minerCost) {
+		if ((numMiners == 0 || (numCarts >= 1 && numMiners < 2)) && myCrew.getBlitzium() >= minerCost) {
 			var createMiner = new BuyAction(UnitType.MINER);
 			actions.add(createMiner);
 		}
 
 		return actions;
-
 	}
+
+	public void assignCarts() {
+		cartAssignations = new HashMap<>();
+
+		var miners = myCrew.getUnits()
+				.stream()
+				.filter(u -> u.getType() == UnitType.MINER)
+				.sorted((x, y) -> y.getBlitzium() - x.getBlitzium())
+				.collect(Collectors.toList());
+
+		var carts = myCrew.getUnits().stream().filter(u -> u.getType() == UnitType.CART).collect(Collectors.toList());
+		for (int i = 0; i < carts.size(); i++) {
+			var cart = carts.get(i);
+			var miner = miners.get(i % miners.size());
+			cartAssignations.put(cart, miner);
+		}
+	}
+
 
 	public Action cartLogic(Unit unit) {
 		// if we have blitzium
@@ -103,16 +123,20 @@ public class Bot {
 		}
 
 
-		// pick a random miner
 		var miners = myCrew.getUnits().stream()
-				.filter(u -> u.getType() == UnitType.MINER && u.getBlitzium() > 0)
+				.filter(u -> u.getType() == UnitType.MINER)
 				.collect(Collectors.toList());
 
 		if (miners.isEmpty()) {
 			return new UnitAction(UnitActionType.NONE, unit.getId(), unit.getPosition());
 		}
 
-		var theChosenOne = terrain.closestPosition(miners.stream().filter(m -> !surplusMiners.contains(m)).map(Unit::getPosition).collect(Collectors.toList()));
+		if (miners.size() == 1) {
+			return generateMoveAction(unit, miners.get(0).getPosition());
+		}
+
+		// If there are multiple miners, only move to a miners with blitzium, to avoid collisions
+		var theChosenOne = cartAssignations.get(unit).getPosition();
 
 		if (terrain.isNeighboring(theChosenOne)) {
 			return generateNoneAction();
@@ -143,10 +167,15 @@ public class Bot {
 
 
 
-		// if we have at least 25 blitzium and are by a cart, drop the blitzium to that cart
-		var adjacentCarts = friendlyAdjacentUnitPositions(unit.getPosition(),UnitType.CART);
-		if (unit.getBlitzium() >= 25 && !adjacentCarts.isEmpty()) {
-			return new UnitAction(UnitActionType.DROP, unit.getId(), adjacentCarts.get(0));
+		// if we have at least 25 blitzium and are by our assigned cart, drop the blitzium to that cart
+        Unit assignedCart = null;
+		for (var entry: cartAssignations.entrySet()) {
+			if (entry.getValue().equals(unit)) {
+				assignedCart = entry.getKey();
+			}
+		}
+		if (assignedCart != null && unit.getBlitzium() >= 25 && terrain.isNeighboring(assignedCart.getPosition())) {
+			return new UnitAction(UnitActionType.DROP, unit.getId(), assignedCart.getPosition());
 		}
 
 
@@ -160,12 +189,12 @@ public class Bot {
 			}
 		}
 
-		var mines = terrain.positionsOfType(TileType.MINE);
+		var mines = terrain.getMineablePositions();
         var mine = mines.stream().filter(m -> !requestedMiningLocations.contains(m)).findFirst().orElseThrow();
         System.out.println(mine);
         requestedMiningLocations.add(mine);
 
-        if (!terrain.isNeighboring(mine) && unit.getBlitzium() < 25) {
+        if (!canMine(unit.getPosition()) && unit.getBlitzium() < 25) {
         	return generateMoveAction(unit, mine);
 		} else {
         	return new UnitAction(UnitActionType.NONE, unit.getId(), unit.getPosition());

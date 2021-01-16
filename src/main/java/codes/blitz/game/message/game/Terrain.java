@@ -4,15 +4,27 @@ import codes.blitz.game.message.exception.PositionOutOfMapException;
 
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class Terrain {
     private GameMessage gameMessage;
     private Unit unit;
     private Map<Position, List<Position>> fastestPath;
+    private List<Unit> allUnits;
+    private Set<Position> occupiedPositions;
 
     public Terrain(GameMessage gameMessage, Unit unit) {
         this.gameMessage = gameMessage;
         this.unit = unit;
+
+        allUnits = new ArrayList<>();
+        for (var crew: gameMessage.getCrews()) {
+            for (var u: crew.getUnits()) {
+                allUnits.add(u);
+            }
+        }
+
+        occupiedPositions = new HashSet<>(allUnits.stream().map(Unit::getPosition).collect(Collectors.toList()));
 
         this.buildFastestPath();
     }
@@ -20,9 +32,6 @@ public class Terrain {
     private void buildFastestPath() {
         fastestPath = new HashMap<>();
         fastestPath.put(unit.getPosition(), Collections.singletonList(unit.getPosition()));
-
-        var myCrew = gameMessage.getCrewsMapById().get(gameMessage.getCrewId());
-        var unitPositions = myCrew.getUnits().stream().map(Unit::getPosition).collect(Collectors.toList());
 
         Queue<Position> queue = new LinkedList<>(Collections.singletonList(unit.getPosition()));
 
@@ -35,7 +44,7 @@ public class Terrain {
                     var pathCopy = new ArrayList<>(pathToPosition);
                     pathCopy.add(neighbor);
                     fastestPath.put(neighbor, pathCopy);
-                    if (positionHasType(neighbor, TileType.EMPTY) && !unitPositions.contains(neighbor)) {
+                    if (positionHasType(neighbor, TileType.EMPTY) && !occupiedPositions.contains(neighbor)) {
                         queue.add(neighbor);
                     }
                 }
@@ -81,6 +90,22 @@ public class Terrain {
         return positions;
     }
 
+    public List<Position> getMineablePositions() {
+        var mines = positionsOfType(TileType.MINE);
+        var mineNeighbors = mines.stream()
+                .flatMap(m -> neighbors(m).stream())
+                .filter(this::reachable)
+                .filter(p -> !occupiedPositions.contains(p))
+                .distinct()
+                .sorted(Comparator.comparingInt(this::distanceTo));
+
+        return mineNeighbors.collect(Collectors.toList());
+    }
+
+    public boolean reachable(Position p) {
+        return fastestPath.containsKey(p);
+    }
+
     public int distanceTo(Position p) {
         return fastestPath.get(p).size() - 1;
     }
@@ -113,6 +138,7 @@ public class Terrain {
         return getAllPositions()
                 .stream()
                 .filter(p -> positionHasType(p, type))
+                .filter(p -> fastestPath.containsKey(p))
                 .sorted(Comparator.comparingInt(this::distanceTo).thenComparingInt(Position::getX))
                 .collect(Collectors.toList());
 
