@@ -57,7 +57,7 @@ public class Bot {
 				.collect(Collectors.toList());
 
 		var numCarts = myCrew.getUnits().stream().filter(unit -> unit.getType() == UnitType.CART).count();
-		var cartCost = myCrew.getPrices().getMinerPrice();
+		var cartCost = myCrew.getPrices().getCartPrice();
 
 		if (numCarts < 1 && cartCost <= myCrew.getBlitzium()) {
 			var createMiner = new BuyAction(UnitType.CART);
@@ -108,11 +108,10 @@ public class Bot {
 		// no carts yet -> we need to return our blitzium
 		if (cartCount < 1 && unit.getBlitzium() > 4) {
 			// if we are adjacent to a base, and have blitzium:
-				for (var adjPos: terrain.neighbors(unitPosition)) {
-					if (positionHasType(adjPos, TileType.BASE)) {
-						return new UnitAction(UnitActionType.DROP, unit.getId(), adjPos);
-					}
-				}
+			if (terrain.isNeighboring(base)) {
+				return new UnitAction(UnitActionType.DROP, unit.getId(), base);
+
+			}
 
 			// else, move towards a depot
 			return generateMoveAction(unit, base);
