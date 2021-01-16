@@ -48,4 +48,9 @@ public class Unit {
 	public void setPath(List<Position> path) {
 		this.path = path;
 	}
+
+	@Override
+	public int hashCode() {
+		return this.getId().hashCode();
+	}
 }
