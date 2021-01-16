@@ -166,12 +166,12 @@ public class Bot {
 			}
 		}
 
-		var mines = terrain.positionsOfType(TileType.MINE);
+		var mines = terrain.getMineablePositions();
         var mine = mines.stream().filter(m -> !requestedMiningLocations.contains(m)).findFirst().orElseThrow();
         System.out.println(mine);
         requestedMiningLocations.add(mine);
 
-        if (!terrain.isNeighboring(mine) && unit.getBlitzium() < 25) {
+        if (!canMine(unit.getPosition()) && unit.getBlitzium() < 25) {
         	return generateMoveAction(unit, mine);
 		} else {
         	return new UnitAction(UnitActionType.NONE, unit.getId(), unit.getPosition());
