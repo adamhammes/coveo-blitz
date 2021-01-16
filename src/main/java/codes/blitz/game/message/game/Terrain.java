@@ -4,6 +4,7 @@ import codes.blitz.game.message.exception.PositionOutOfMapException;
 
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class Terrain {
     private GameMessage gameMessage;
@@ -81,6 +82,12 @@ public class Terrain {
         return positions;
     }
 
+//    private List<Position> getMineablePositions() {
+//        var mines = positionsOfType(TileType.MINE);
+//        var mineNeighbors = mines.stream()
+//                .flatMap(m -> Stream.of(neighbors(m)));
+//    }
+
     public int distanceTo(Position p) {
         return fastestPath.get(p).size() - 1;
     }
@@ -113,6 +120,7 @@ public class Terrain {
         return getAllPositions()
                 .stream()
                 .filter(p -> positionHasType(p, type))
+                .filter(p -> fastestPath.containsKey(p))
                 .sorted(Comparator.comparingInt(this::distanceTo).thenComparingInt(Position::getX))
                 .collect(Collectors.toList());
 
