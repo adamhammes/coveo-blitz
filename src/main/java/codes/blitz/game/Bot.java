@@ -151,6 +151,10 @@ public class Bot {
 				.filter(u -> u.getType() == UnitType.MINER)
 				.collect(Collectors.toList());
 
+		if (miners.isEmpty()) {
+			return;
+		}
+
 		var carts = myCrew.getUnits().stream().filter(u -> u.getType() == UnitType.CART).collect(Collectors.toList());
 		for (int i = 0; i < carts.size(); i++) {
 			var cart = carts.get(i);
@@ -185,12 +189,16 @@ public class Bot {
 			return generateMoveAction(unit, miners.get(0).getPosition());
 		}
 
-		var theChosenOne = cartAssignations.get(unit).getPosition();
-
-		if (!terrain.reachable(theChosenOne) || terrain.isNeighboring(theChosenOne)) {
+		var theChosenOne = cartAssignations.get(unit);
+		if (theChosenOne == null) {
 			return generateNoneAction();
 		}
-		return generateMoveAction(unit, theChosenOne);
+
+		var chosenPosition = theChosenOne.getPosition();
+		if (!terrain.reachable(chosenPosition) || terrain.isNeighboring(chosenPosition)) {
+			return generateNoneAction();
+		}
+		return generateMoveAction(unit, chosenPosition);
 	}
 
 	private UnitAction generateNoneAction() {
